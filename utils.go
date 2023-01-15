@@ -19,6 +19,37 @@ func showItemMenu(text, listCaption, itemID string, u message.Update) {
 	}, tgui.Wrap(tgui.InlineCaller(listCaption, "/list")))
 }
 
+func showEmptyListMenu(u *message.Update) {
+	show(u,
+		"🕸 Your list is empty at the moment\nText me anything and I'll add it",
+		tgui.Wrap(tgui.InlineCaller("🔄 Refresh", "/list")),
+	)
+}
+
+func showListMenu(chart *ShoppingList, u *message.Update) {
+	if chart == nil {
+		showEmptyListMenu(u)
+		return
+	}
+	size := chart.Items()
+	if size == 0 {
+		showEmptyListMenu(u)
+		return
+	}
+
+	kbd := make([][]tgui.InlineButton, size+1)
+	chart.ForEach(func(itemID string, item *ShoppingItem) {
+		size--
+		kbd[size] = tgui.Wrap(tgui.InlineCaller(item.Caption(), "/open", itemID))
+	})
+	kbd[len(kbd)-1] = []tgui.InlineButton{
+		tgui.InlineCaller("🗑 Delete all", "/drop"),
+		tgui.InlineCaller("🔄 Refresh list", "/list"),
+	}
+	show(u, "🛒 Your current shopping list:", kbd...)
+	return
+}
+
 func extractKbd(msg message.UpdateMessage) [][]tgui.InlineButton {
 	if markup := msg.InlineKeyboard; markup != nil {
 		return markup.InlineKeyboard
@@ -26,13 +57,23 @@ func extractKbd(msg message.UpdateMessage) [][]tgui.InlineButton {
 	return nil
 }
 
-func extractItem(trigger string, callback *message.CallbackQuery) (itemID string, item *ShoppingItem) {
+func extractItemID(callback *message.CallbackQuery) string {
+	if callback == nil {
+		return ""
+	}
+	command := callback.Data
+	return strings.TrimSpace(command[strings.IndexRune(command, ' '):])
+}
+
+func extractItem(callback *message.CallbackQuery) (itemID string, item *ShoppingItem) {
 	if callback == nil {
 		return
 	}
 
-	itemID = strings.TrimPrefix(callback.Data, trigger+" ")
-	item = GetItem(itemID)
+	itemID = extractItemID(callback)
+	if house, registered := SelectHouse(callback.From.ID); registered {
+		item = house.Chart.GetItem(itemID)
+	}
 	return
 }
 
@@ -72,7 +113,7 @@ func show(u *message.Update, text string, buttons ...[]tgui.InlineButton) (sent 
 	if u.CallbackQuery != nil {
 		msg := u.CallbackQuery.Message
 		if msg != nil && text == msg.Text && sameKbd(extractKbd(*msg), buttons) {
-			u.CallbackQuery.Answer(nil)
+			u.CallbackQuery.AnswerToast("🫤 Nothing changed", 0)
 			return nil
 		}
 	}

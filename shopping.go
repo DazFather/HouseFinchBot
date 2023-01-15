@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -11,7 +12,32 @@ type ShoppingItem struct {
 	important bool
 }
 
-var shoppingList = map[string]*ShoppingItem{}
+type ShoppingList struct {
+	items map[string]*ShoppingItem
+}
+
+type House struct {
+	Chart ShoppingList
+}
+
+func newHouse() *House {
+	return &House{Chart: newShoppingList()}
+}
+
+func newShoppingList() ShoppingList {
+	return ShoppingList{items: make(map[string]*ShoppingItem)}
+}
+
+var saved = make(map[int64]*House)
+
+func SelectHouse(chatID int64) (house *House, registeredUser bool) {
+	house, registeredUser = saved[chatID]
+	if !registeredUser {
+		house = newHouse()
+		saved[chatID] = house
+	}
+	return
+}
 
 var EMOJI = map[string]string{
 	"mushroom":   "🍄",
@@ -70,12 +96,14 @@ var EMOJI = map[string]string{
 	"ice":        "🧊",
 }
 
+var plurals = regexp.MustCompile("e?s$")
+
 func buildName(rawName string) string {
 	rawName = strings.ToLower(strings.TrimSpace(rawName))
 	var name = strings.ToUpper(string(rawName[0])) + rawName[1:]
 
 	for _, piece := range strings.Split(rawName, " ") {
-		if emoji, found := EMOJI[strings.TrimSuffix(piece, "s")]; found {
+		if emoji, found := EMOJI[plurals.ReplaceAllLiteralString(piece, "")]; found {
 			name = emoji + " " + name
 			break
 		}
@@ -94,17 +122,11 @@ func (item ShoppingItem) Caption() (caption string) {
 	return fmt.Sprint(" 🔻 ", caption, " x", item.quantity)
 }
 
-func GetItem(itemID string) *ShoppingItem {
-	return shoppingList[itemID]
+func (chart ShoppingList) GetItem(itemID string) *ShoppingItem {
+	return chart.items[itemID]
 }
 
-func GetAllItems() []ShoppingItem {
-	return GenItemList(func(itemID string, item ShoppingItem) ShoppingItem {
-		return item
-	})
-}
-
-func Save(name string, quantity uint8, important bool) (itemID string, item *ShoppingItem) {
+func (chart *ShoppingList) Save(name string, quantity uint8, important bool) (itemID string, item *ShoppingItem) {
 	// Generate itemID
 	itemID = name
 	item = &ShoppingItem{
@@ -112,54 +134,52 @@ func Save(name string, quantity uint8, important bool) (itemID string, item *Sho
 		name:      buildName(name),
 		important: important,
 	}
-	shoppingList[itemID] = item
+
+	chart.items[itemID] = item
 	return
 }
 
-func DropList() {
-	shoppingList = make(map[string]*ShoppingItem)
+func (chart ShoppingList) ForEach(do func(itemID string, item *ShoppingItem)) {
+	for itemID, item := range chart.items {
+		do(itemID, item)
+	}
 }
 
-func DropItem(itemID string) bool {
-	_, ok := shoppingList[itemID]
+func (chart ShoppingList) Items() int {
+	return len(chart.items)
+}
+
+func (chart *ShoppingList) DropAll() {
+	chart.items = make(map[string]*ShoppingItem)
+}
+
+func (chart *ShoppingList) DropItem(itemID string) bool {
+	_, ok := chart.items[itemID]
 	if ok {
-		delete(shoppingList, itemID)
+		delete(chart.items, itemID)
 	}
 
 	return ok
 }
 
-func AddQuantity(itemID string, modifier uint8) int {
-	item := shoppingList[itemID]
+func (chart *ShoppingList) AddQuantity(itemID string, modifier uint8) int {
+	item := chart.items[itemID]
 	item.quantity += modifier
 	return int(item.quantity)
 }
 
-func RemoveQuantity(itemID string, modifier uint8) (left int) {
-	var item = shoppingList[itemID]
+func (chart *ShoppingList) RemoveQuantity(itemID string, modifier uint8) (left int) {
+	var item = chart.items[itemID]
 	if item == nil {
 		return 0
 	}
 
 	left = int(item.quantity) - int(modifier)
-
 	if modifier >= item.quantity {
-		delete(shoppingList, itemID)
+		chart.DropItem(itemID)
 		return
 	}
 
 	item.quantity -= modifier
 	return
-}
-
-func GenItemList[T any](mapper func(string, ShoppingItem) T) []T {
-	var list = make([]T, len(shoppingList))
-
-	i := 0
-	for itemID, item := range shoppingList {
-		list[i] = mapper(itemID, *item)
-		i++
-	}
-
-	return list
 }
