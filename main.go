@@ -6,21 +6,38 @@ import (
 )
 
 func main() {
-	const (
-		MSG     message.UpdateType = message.MESSAGE
-		CLB                        = message.CALLBACK_QUERY
-		MSG_CLB                    = MSG + CLB
+	// Start bot using following commands...
+	robot.Start(
+		// ... launched by inline buttons
+		btnReply("/open", openHandler),
+		btnReply("/open", openHandler),
+		btnReply("/drop", dropHandler),
+		btnReply("/join", joinHandler),
+		btnReply("/add", addHandler),
+		btnReply("/sub", subHandler),
+		btnReply("/del", delHandler),
+		closeCommand, // delete message and show toast alert
+		// ... that can be launched also directly from the user
+		userMenu("/start", startHandler, "▶️ Start the bot"),
+		userMenu("/home", homeHandler, "🏠 House info"),
+		userMenu("/list", listHandler, "🛒 Your shopping list"),
+		userMenu("/share", shareHandler, "👥 Share with someone"),
+		userMenu("/id", idHandler, ""),
+		userMenu("/info", infoHandler, "ℹ️ Bot infos"),
+		// ... reply without any explicit /trigger and only by user
+		robot.Command{CallFunc: messageHandler, ReplyAt: message.MESSAGE},
 	)
+}
 
-	// Start bot
-	robot.Start([]robot.Command{
-		{Trigger: "/start", CallFunc: startHandler, ReplyAt: MSG, Description: "Strat the bot"},
-		{Trigger: "/list", CallFunc: listHandler, ReplyAt: MSG_CLB, Description: "Your shopping list"},
-		{Trigger: "/open", CallFunc: openHandler, ReplyAt: CLB},
-		{Trigger: "/drop", CallFunc: dropHandler, ReplyAt: CLB},
-		{Trigger: "/add", CallFunc: addHandler, ReplyAt: CLB},
-		{Trigger: "/sub", CallFunc: subHandler, ReplyAt: CLB},
-		{Trigger: "/del", CallFunc: delHandler, ReplyAt: CLB},
-		{CallFunc: messageHandler, ReplyAt: MSG},
-	}...)
+func btnReply(trigger string, handler robot.CommandFunc) robot.Command {
+	return robot.Command{Trigger: trigger, CallFunc: handler, ReplyAt: message.CALLBACK_QUERY}
+}
+
+func userMenu(trigger string, handler robot.CommandFunc, description string) robot.Command {
+	return robot.Command{
+		Trigger:     trigger,
+		CallFunc:    handler,
+		ReplyAt:     message.MESSAGE + message.CALLBACK_QUERY,
+		Description: description,
+	}
 }
