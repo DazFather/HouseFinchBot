@@ -8,11 +8,15 @@ import (
 	"github.com/DazFather/parrbot/tgui"
 )
 
-var infoHandler = tgui.Sender(message.Text{bold("🐦 HouseFinchBot") + ` is a free and ` + repo("open source", "HouseFinchBot") + ` Telegram's bot that allows to better manage your house.
-It's still in work in progress and is being actively developed with ❤️ by @DazFather.
+var closeCommand robot.Command = tgui.Closer("/close", false)
 
-Powerade by ` + repo("Parr(B)ot", "parrbot") + ` framework and written in pure ` + link("Go", "https://go.dev/") + ` 💪,
-Feel free to contact me on Telegram or contribue to the projects`, defaultOpt()})
+var infoHandler = tgui.Sender(message.Text{fmt.Sprintln(
+	"🐦", bold("HouseFinchBot"), "is a free and", repo("open source", "HouseFinchBot"),
+	"Telegram's bot that allows to better manage your house.",
+	"\nIt's still in work in progress and is being actively developed with ❤️ by @DazFather",
+	"\n💪Powerade by", repo("Parr(B)ot", "parrbot"), "framework and written in pure ", link("Go", "https://go.dev/"),
+	emph("Feel free to contact me on Telegram or contribute to the projects"),
+), defaultOpt()})
 
 var startHandler = tgui.Sender(message.Text{fmt.Sprintln(
 	"👋 Welcome, I'm", bold("House Finch Bot"), "🐦",
@@ -20,8 +24,6 @@ var startHandler = tgui.Sender(message.Text{fmt.Sprintln(
 	"\nFor now I only know how to keep track of your shopping list but I'm learning 😅",
 	"\nJust type the name of the item and it will be auto"+emph("magically✨")+" added to the /list",
 ), defaultOpt()})
-
-var closeCommand robot.Command = tgui.Closer("/close", false)
 
 func listHandler(b *robot.Bot, u *message.Update) message.Any {
 	var chart *ShoppingList = nil
