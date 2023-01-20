@@ -13,6 +13,7 @@ func main() {
 		btnReply("/open", openHandler),
 		btnReply("/drop", dropHandler),
 		btnReply("/join", joinHandler),
+		btnReply("/kick", kickHandler),
 		btnReply("/add", addHandler),
 		btnReply("/sub", subHandler),
 		btnReply("/del", delHandler),
@@ -20,9 +21,10 @@ func main() {
 		// ... that can be launched also directly from the user
 		userMenu("/start", startHandler, "▶️ Start the bot"),
 		userMenu("/home", homeHandler, "🏠 House info"),
+		userMenu("/roomers", roomerHandler, "👥 Manage roomers"),
 		userMenu("/list", listHandler, "🛒 Your shopping list"),
-		userMenu("/share", shareHandler, "👥 Share with someone"),
-		userMenu("/id", idHandler, ""),
+		userMenu("/share", shareHandler, "📨 Invite someone"),
+		userMenu("/id", idHandler, "🆔 Get your Telegram unique ID"),
 		userMenu("/info", infoHandler, "ℹ️ Bot infos"),
 		// ... reply without any explicit /trigger and only by user
 		robot.Command{CallFunc: messageHandler, ReplyAt: message.MESSAGE},

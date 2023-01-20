@@ -117,30 +117,31 @@ func shareHandler(b *robot.Bot, u *message.Update) message.Any {
 		name      = extractName(msg.From)
 	)
 
-	if strUserID == "" {
+	if callback != nil || strUserID == "" {
 		show(u, fmt.Sprintln(
-			"📨 To invite someone in your house use the command like this:\n",
-			mono("/share TELEGRAMID"), "replacing", emph("\"TELEGRAMID\""), "with the Telegram's unique chat ID of the", bold("PERSON YOU WANT"), "to invite.",
+			"📨", bold("Invite new roomers"),
+			"\nTo invite someone in your house use the command like this:\n",
+			mono("/share TELEGRAMID"), "replacing", emph("\"TELEGRAMID\""), "with the Telegram's unique chat ID of the", bold("PERSON YOU WANT"), "to invite",
+			"\n", emph("es:"), mono("/share ", b.ChatID),
 			"\nThe other person must have started the bot already. If instead you want to know your ID use the command /id",
 		), inlineCallerRow("🔙 Home menu", "/home"))
 		return nil
 	}
 
-	fmt.Println(b.ChatID)
-
 	// Foword request to owner if user is not
 	if !house.IsOwner(b.ChatID) {
-		go send(house.ownerID,
-			"🔔 "+name+" your house member would like to invite user: "+strUserID,
+		invite := send(house.ownerID,
+			"🔔 "+name+" your house member would like to invite user: "+user(strUserID, strUserID),
 			inlineCallerRow("📨 Send invitation", "/share", strUserID),
 		)
-
-		return warn(callback, "📨 Request sent to the house owner")
+		if invite != nil {
+			return warn(callback, "📨 Request sent to the house owner")
+		}
 	}
 
 	// Send invitation
 	if userID, err := toUserID(strUserID); err == nil {
-		go send(userID,
+		invite := send(userID,
 			fmt.Sprintln(
 				"💌 You have been invited to join the house of", name,
 				emph("\n⚠️ If you join you loose all the datas (shopping list) of your current house"),
@@ -150,10 +151,12 @@ func shareHandler(b *robot.Bot, u *message.Update) message.Any {
 				tgui.InlineCaller("❌ Reject", "/close", "❌ Invitation rejected"),
 			},
 		)
-		return warn(callback, "📨 Request sent to "+strUserID)
+		if invite != nil {
+			return warn(callback, "📨 Request sent to "+extractChatName(invite.Chat))
+		}
 	}
 
-	return warn(callback, "🫤 Invalid user")
+	return warn(callback, "🫤 Something went wrong")
 }
 
 func joinHandler(b *robot.Bot, u *message.Update) message.Any {
@@ -164,7 +167,7 @@ func joinHandler(b *robot.Bot, u *message.Update) message.Any {
 	)
 
 	if userID, err := toUserID(trimCommand(callback.Data)); err == nil {
-		if house, registered := SelectHouse(userID); registered && house.Join(b.ChatID) {
+		if house, registered := SelectHouse(userID); registered && house.Join(b.ChatID, name) {
 			go send(userID, "🔔 "+name+" accepted the invitation!\n"+welcome)
 
 			show(u, fmt.Sprintln("✅", bold("Invitation accepted!"), "\n"+welcome,
@@ -177,23 +180,70 @@ func joinHandler(b *robot.Bot, u *message.Update) message.Any {
 	return warn(callback, "🫤 Something went wrong")
 }
 
+func kickHandler(b *robot.Bot, u *message.Update) message.Any {
+	var (
+		callback = u.CallbackQuery
+		name     = extractName(callback.From)
+	)
+
+	if userID, err := toUserID(trimCommand(callback.Data)); err == nil {
+		if house, registered := SelectHouse(b.ChatID); registered && house.IsOwner(b.ChatID) && house.Kick(userID) {
+			go send(userID, "🔔 "+name+" removed you from the house")
+			return warn(callback, "User kicked successfully!")
+		}
+	}
+
+	return warn(callback, "🫤 Something went wrong")
+}
+
 func idHandler(b *robot.Bot, u *message.Update) message.Any {
 	return message.Text{"🆔 Your Telegram ID: " + mono(b.ChatID), defaultOpt()}
 }
 
 func homeHandler(b *robot.Bot, u *message.Update) message.Any {
-	var text string = bold("🏠 Home")
+	var (
+		text string = bold("🏠 Home")
+		kbd         = [][]tgui.InlineButton{
+			inlineCallerRow("🛒 Shopping list", "/list"),
+			inlineCallerRow("📨 Invite someone", "/share"),
+			inlineCallerRow("✖️ Close menu", "/close"),
+		}
+	)
+
 	if house, registered := SelectHouse(b.ChatID); registered {
-		if size := len(house.shared); size > 1 {
+		if size := house.Members(); size > 0 {
 			text += " (👥" + mono(size+1) + ")"
+			if house.IsOwner(b.ChatID) {
+				kbd = append(kbd, inlineCallerRow("👥 Manage roomers", "/roomers"))
+			}
 		}
 	}
-	text += "\nUse the button below to help you navigate the bot"
 
-	show(u, text+"\n🐦 - \""+emph("Home sweet home")+"\"",
-		inlineCallerRow("🛒 Shopping list", "/list"),
-		inlineCallerRow("📨 Invite someone", "/share"),
-		inlineCallerRow("✖️ Close menu", "/close"),
+	show(u,
+		text+"\nUse the button below to help you navigate the bot"+"\n🐦 - \""+emph("Home sweet home")+"\"",
+		kbd...,
 	)
+	return nil
+}
+
+func roomerHandler(b *robot.Bot, u *message.Update) message.Any {
+	var house, registered = SelectHouse(b.ChatID)
+
+	if !registered || house.Members() == 0 {
+		return warn(u.CallbackQuery, "😐 You are the only roomer")
+	}
+
+	if !house.IsOwner(b.ChatID) {
+		return warn(u.CallbackQuery, "🚫 You are NOT the owner")
+	}
+
+	size := house.Members()
+	kbd := make([][]tgui.InlineButton, size)
+	house.EachMembers(func(userID int64, name string) {
+		size--
+		kbd[size] = inlineCallerRow("🚷 "+name, "/kick", toString(userID))
+	})
+
+	show(u, bold("👥 Manage your roomers")+"\nTap on the ID of the roomer to kick him out of the house", kbd...)
 	return nil
 }

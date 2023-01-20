@@ -89,11 +89,16 @@ func show(u *message.Update, text string, buttons ...[]tgui.InlineButton) (sent 
 	return sent
 }
 
-func send(to int64, text string, buttons ...[]tgui.InlineButton) {
-	var msg = message.Text{text, defaultOpt(buttons...)}
-	if _, err := msg.Send(to); err != nil {
-		fmt.Println("Unable to send owner message:", err)
+func send(to int64, text string, buttons ...[]tgui.InlineButton) *message.UpdateMessage {
+	var (
+		msg       = message.Text{text, defaultOpt(buttons...)}
+		sent, err = msg.Send(to)
+	)
+
+	if err != nil {
+		log.Println("Unable to send message:", err)
 	}
+	return sent
 }
 
 func warn(callback *message.CallbackQuery, text string) message.Any {
@@ -143,12 +148,30 @@ func extractName(user *echotron.User) string {
 
 	var name = user.Username
 	if name != "" {
-		return name
+		return "@" + name
 	}
 
 	name = user.FirstName
 	if user.LastName != "" {
 		name += " " + user.LastName
+	}
+	return name
+}
+
+// Extract @username or name + surname of user
+func extractChatName(chat *echotron.Chat) string {
+	if chat == nil {
+		return ""
+	}
+
+	var name = chat.Username
+	if name != "" {
+		return "@" + name
+	}
+
+	name = chat.FirstName
+	if chat.LastName != "" {
+		name += " " + chat.LastName
 	}
 	return name
 }
@@ -177,7 +200,11 @@ func toString(userID int64) string {
 const defParseMode echotron.ParseMode = "HTML"
 
 func link(caption, url string) string {
-	return fmt.Sprint(`<a href="`, url, `">`, caption, `</a>`)
+	return `<a href="` + url + `">` + caption + `</a>`
+}
+
+func user[T int | int64 | string](caption string, userID T) string {
+	return link(caption, "tg://user?id="+fmt.Sprint(userID))
 }
 
 func repo(caption, name string) string {
