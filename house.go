@@ -1,25 +1,67 @@
 package main
 
+import "time"
+
 type House struct {
 	Chart   ShoppingList
 	ownerID int64
 	shared  map[int64]string
+	active  chan bool
+	cleaner *time.Timer
 }
 
-func newHouse(ownerID int64) *House {
-	return &House{Chart: newShoppingList(), ownerID: ownerID}
+var CACHE = make(map[int64]*House)
+
+func newHouse(ownerID int64) (house *House) {
+	// Consider an house unsued after no given interaction in:
+	const UNUSED = time.Hour * 24 * 240
+	// Create the channel for each user interaction
+	var interact = make(chan bool)
+
+	// Initialize the house
+	house = &House{
+		Chart:   newShoppingList(),
+		ownerID: ownerID,
+		active:  interact,
+		cleaner: time.AfterFunc(UNUSED, func() {
+			interact <- false
+		}),
+	}
+	// save it
+	CACHE[ownerID] = house
+
+	// In a background process...
+	go func() {
+		// ... check if user are not interacting ...
+		for active := range interact {
+			if !active || !house.cleaner.Stop() {
+				break
+			}
+			house.cleaner.Reset(UNUSED)
+		}
+		// ... in this case delete the house from memory
+		house.delete()
+	}()
+
+	return
+}
+
+func (house *House) delete() {
+	close(house.active)
+	for userID := range house.shared {
+		delete(CACHE, userID)
+	}
+	delete(CACHE, house.ownerID)
 }
 
 func SelectHouse(chatID int64) (house *House, registeredUser bool) {
 	house, registeredUser = CACHE[chatID]
 	if !registeredUser {
 		house = newHouse(chatID)
-		CACHE[chatID] = house
 	}
+	house.active <- true
 	return
 }
-
-var CACHE = make(map[int64]*House)
 
 func (house House) IsOwner(userID int64) bool {
 	return house.ownerID == userID
